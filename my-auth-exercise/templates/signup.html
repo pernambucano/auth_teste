@@ -1,0 +1,35 @@
+<html>
+    <head>
+        <title>Registration</title>
+    <head>
+
+    <body>
+        <form method="post">
+            <div>
+                <label for="username"> Username </label>
+                <input type="text" name="username" id="username">
+            </div>
+
+            <div>
+                <label for="password"> Password </label>
+                <input type="password" name="password" id="password">
+            </div>
+
+            <div>
+                <label for="verify_password"> Verify Password </label>
+                <input type="password" name="verify_password"
+                id="verify_password">
+            </div>
+
+
+            <div>
+                <label for="email"> Email </label>
+                <input type="text" name="email" id="email">
+            </div>
+
+            <input type="submit">
+
+            <div id="error">{{error}}</div>
+        </form>
+    </body>
+</html>
