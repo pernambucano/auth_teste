@@ -17,6 +17,10 @@
 import webapp2
 import os
 import jinja2
+import hmac
+import hashlib
+import random
+import string
 
 from google.appengine.ext import db
 
@@ -25,7 +29,40 @@ jinja_env = jinja2.Environment(loader=jinja2.FileSystemLoader(template_dir),
                                autoescape=True)
 
 
+SECRET = "secret"
+
+
+def make_salt():
+    return "".join(random.choice(string.letters) for i in range(5))
+
+
+def hash_str(s):
+    return hmac.new(SECRET, s).hexdigest()
+
+
+def make_pw_hash(username, pw, salt = None):
+    if not salt:
+        salt = make_salt()
+    return "%s,%s" % (hashlib.sha256(username+pw+salt).hexdigest(), salt)
+
+
+def validate_pw_hash(username, pw, h):
+    salt = h.split(',')[1]
+    return h == make_pw_hash(username, pw, salt)
+
+
+def make_secure_hash(s):
+    return "%s|%s" % (s, hash_str(s))
+
+
+def check_secure_val(h):
+    val = h.split('|')[0]
+    if h == make_secure_hash(val):
+        return val
+
+
 class Handler(webapp2.RequestHandler):
+
     def write(self, *a, **k):
         self.response.out.write(*a, **k)
 
@@ -46,6 +83,7 @@ class Account(db.Model):
 
 
 class SignUpHandler(Handler):
+
     def get(self):
         self.render("signup.html")
 
@@ -58,14 +96,14 @@ class SignUpHandler(Handler):
 
         # is the information right?
         if username and password and (password == verify_password):
-
+            secure_password = make_pw_hash(username, password)
             user_id = 0
             if not Account.get_by_key_name(username):
                 if email:
-                    account = Account(username=username, password=password,
+                    account = Account(username=username, password=secure_password,
                                       email=email, id=username)
                 else:
-                    account = Account(username=username, password=password,
+                    account = Account(username=username, password=secure_password,
                                       id=username)
                 account.put()
                 user_id = account.key().id()
@@ -75,8 +113,9 @@ class SignUpHandler(Handler):
 
             print(user_id)
 
+            cookie_user_id = make_secure_hash(str(user_id))
             self.response.headers.add_header('Set-Cookie', 'user_id=%s;Path=/'
-                                             % user_id)
+                                             % cookie_user_id)
             self.redirect("/welcome")
         else:
             # return error
@@ -85,17 +124,22 @@ class SignUpHandler(Handler):
 
 
 class WelcomeHandler(Handler):
+
     def get(self):
+
         user_id = self.request.cookies.get("user_id")
-
-        if user_id.isdigit():
-            user_id = int(user_id)
+        if user_id:
+            cookie_user_id = check_secure_val(user_id)
+            if cookie_user_id:
+                user_id = int(cookie_user_id)
+            else:
+                user_id = 0
+            user = Account.get_by_id(user_id)
+            print("user id: %s" % user.username)
+            self.render("welcome.html", user_name=user.username)
         else:
-            user_id = 0
-        user = Account.get_by_id(user_id)
-        print("user id: %s" % user.username)
+            self.render("welcome.html")
 
-        self.render("welcome.html", user_name=user.username)
 
 app = webapp2.WSGIApplication([
     ('/signup', SignUpHandler),
